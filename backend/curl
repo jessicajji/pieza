@@ -1,0 +1,3 @@
+curl -X POST "http://localhost:8000/api/search" \
+     -H "Content-Type: application/json" \
+     -d '{"prompt": "modern velvet sofa with wood legs, about 70 inches wide"}'
