@@ -1,12 +1,14 @@
 import logging
 import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 import openai
 import torch
 import clip
 from PIL import Image
 import requests
 from io import BytesIO
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from ..schemas.ebay import EbayItem
 
@@ -47,6 +49,42 @@ class EmbeddingService:
         )
         return response.data[0].embedding
     
+    def get_bulk_text_embeddings(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
+        """Generate text embeddings for multiple texts in batches.
+        
+        Args:
+            texts: List of texts to generate embeddings for
+            batch_size: Number of texts to process in each batch
+            
+        Returns:
+            List of text embedding vectors
+        """
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            logger.info(f"Processing text embedding batch {i//batch_size + 1}/{(len(texts) + batch_size - 1)//batch_size}")
+            
+            try:
+                response = self.openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=batch
+                )
+                batch_embeddings = [data.embedding for data in response.data]
+                all_embeddings.extend(batch_embeddings)
+                
+                # Rate limiting - be nice to OpenAI API
+                if i + batch_size < len(texts):
+                    import time
+                    time.sleep(0.1)
+                    
+            except Exception as e:
+                logger.error(f"Error processing text embedding batch: {e}")
+                # Add empty embeddings for failed batch
+                all_embeddings.extend([[0.0] * 1536] * len(batch))
+        
+        return all_embeddings
+    
     def get_image_embedding(self, image_url: str) -> List[float]:
         """Generate image embedding using CLIP model.
         
@@ -68,27 +106,136 @@ class EmbeddingService:
         
         return image_features[0].cpu().numpy().tolist()
     
-    def get_item_embeddings(self, item: EbayItem) -> Tuple[List[float], Optional[List[float]]]:
-        """Generate embeddings for an eBay item.
+    def get_bulk_image_embeddings(self, image_urls: List[str], max_workers: int = 4) -> List[Optional[List[float]]]:
+        """Generate image embeddings for multiple images in parallel.
         
         Args:
-            item: eBay item to generate embeddings for
+            image_urls: List of image URLs to generate embeddings for
+            max_workers: Maximum number of parallel workers
             
         Returns:
-            Tuple of (text_embedding, image_embedding)
+            List of image embedding vectors (None for failed embeddings)
         """
-        # Generate text embedding from item title
-        text_embedding = self.get_text_embedding(item.title)
+        embeddings = [None] * len(image_urls)
         
-        # Generate image embedding if image URL is available
+        def process_single_image(args):
+            idx, url = args
+            try:
+                return idx, self.get_image_embedding(url)
+            except Exception as e:
+                logger.warning(f"Failed to generate image embedding for {url}: {e}")
+                return idx, None
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Process images in parallel
+            futures = [executor.submit(process_single_image, (i, url)) for i, url in enumerate(image_urls)]
+            
+            for future in futures:
+                try:
+                    idx, embedding = future.result()
+                    embeddings[idx] = embedding
+                except Exception as e:
+                    logger.error(f"Error in image embedding processing: {e}")
+        
+        return embeddings
+    
+    def get_item_embeddings(self, item: EbayItem) -> Tuple[List[float], Optional[List[float]]]:
+        """Generate embeddings for an eBay item using all available fields for text embedding."""
+        # Combine as much info as possible for the text embedding
+        text_parts = [
+            item.title,
+            f"Condition: {item.condition}",
+            f"Location: {item.location}",
+            f"Price: {item.price} USD",
+            f"Shipping cost: {item.shipping_cost if item.shipping_cost is not None else 'N/A'} USD",
+            f"Seller rating: {item.seller_rating}",
+            f"Item URL: {item.item_url}"
+        ]
+        # If category or description fields exist, add them
+        if hasattr(item, 'category') and getattr(item, 'category', None):
+            text_parts.append(f"Category: {item.category}")
+        if hasattr(item, 'description') and getattr(item, 'description', None):
+            text_parts.append(f"Description: {item.description}")
+        text = ". ".join(str(part) for part in text_parts if part)
+        text_embedding = self.get_text_embedding(text)
+
+        # Always embed the image if image_url is present
         image_embedding = None
         if item.image_url:
             try:
                 image_embedding = self.get_image_embedding(item.image_url)
             except Exception as e:
                 logger.error(f"Failed to generate image embedding: {str(e)}")
-        
         return text_embedding, image_embedding
+    
+    def get_bulk_item_embeddings(self, items: List[EbayItem], batch_size: int = 50) -> List[Tuple[List[float], Optional[List[float]]]]:
+        """Generate embeddings for multiple eBay items in batches.
+        
+        Args:
+            items: List of eBay items to generate embeddings for
+            batch_size: Number of items to process in each batch
+            
+        Returns:
+            List of (text_embedding, image_embedding) tuples
+        """
+        all_embeddings = []
+        
+        for i in range(0, len(items), batch_size):
+            batch = items[i:i + batch_size]
+            logger.info(f"Processing item embedding batch {i//batch_size + 1}/{(len(items) + batch_size - 1)//batch_size}")
+            
+            # Prepare text data for batch processing
+            texts = []
+            image_urls = []
+            
+            for item in batch:
+                # Prepare text for embedding
+                text_parts = [
+                    item.title,
+                    f"Condition: {item.condition}",
+                    f"Location: {item.location}",
+                    f"Price: {item.price} USD",
+                    f"Shipping cost: {item.shipping_cost if item.shipping_cost is not None else 'N/A'} USD",
+                    f"Seller rating: {item.seller_rating}",
+                    f"Item URL: {item.item_url}"
+                ]
+                if hasattr(item, 'category') and getattr(item, 'category', None):
+                    text_parts.append(f"Category: {item.category}")
+                if hasattr(item, 'description') and getattr(item, 'description', None):
+                    text_parts.append(f"Description: {item.description}")
+                
+                text = ". ".join(str(part) for part in text_parts if part)
+                texts.append(text)
+                
+                # Collect image URLs
+                image_urls.append(item.image_url if item.image_url else None)
+            
+            # Generate text embeddings in batch
+            text_embeddings = self.get_bulk_text_embeddings(texts)
+            
+            # Generate image embeddings in parallel
+            image_embeddings = self.get_bulk_image_embeddings([url for url in image_urls if url])
+            
+            # Combine results
+            batch_embeddings = []
+            img_idx = 0
+            for j, item in enumerate(batch):
+                text_emb = text_embeddings[j]
+                img_emb = None
+                if image_urls[j]:
+                    img_emb = image_embeddings[img_idx]
+                    img_idx += 1
+                
+                batch_embeddings.append((text_emb, img_emb))
+            
+            all_embeddings.extend(batch_embeddings)
+            
+            # Rate limiting between batches
+            if i + batch_size < len(items):
+                import time
+                time.sleep(1)
+        
+        return all_embeddings
     
     def get_query_embedding(self, query: str) -> List[float]:
         """Generate embedding for a search query.

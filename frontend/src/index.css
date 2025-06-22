@@ -1,0 +1,97 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. */
+
+@layer base {
+  :root {
+    --background: 36 33% 92%; /* darker cream */
+    --foreground: 25 35% 25%; /* dark-brown-gray */
+
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 25 35% 25%; /* dark-brown-gray */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 35% 25%;
+
+    --primary: 17 41% 50%; /* rust */
+    --primary-foreground: 36 33% 97%; /* light-cream */
+
+    --secondary: 36 33% 97%; /* lighter cream */
+    --secondary-foreground: 25 35% 25%; /* dark-brown-gray */
+
+    --muted: 38 29% 85%; /* Pale Taupe */
+    --muted-foreground: 25 35% 45%;
+
+    --accent: 17 41% 50%; /* rust */
+    --accent-foreground: 36 33% 97%; /* light-cream */
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 38 29% 85%; /* Pale Taupe */
+    --input: 38 29% 85%; /* Pale Taupe */
+    --ring: 17 41% 50%; /* rust */
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 36 33% 97%; /* light-cream */
+    --sidebar-foreground: 25 35% 25%; /* dark-brown-gray */
+    --sidebar-primary: 17 41% 50%; /* rust */
+    --sidebar-primary-foreground: 36 33% 97%; /* light-cream */
+    --sidebar-accent: 38 29% 90%; /* lighter pale taupe */
+    --sidebar-accent-foreground: 17 41% 50%; /* rust */
+    --sidebar-border: 38 29% 85%; /* Pale Taupe */
+    --sidebar-ring: 17 41% 50%; /* rust */
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

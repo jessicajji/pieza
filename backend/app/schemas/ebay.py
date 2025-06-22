@@ -26,6 +26,21 @@ class EbaySearchRequest(BaseModel):
 class EbaySearchResponse(BaseModel):
     """Schema for eBay search response."""
     items: List[EbayItem] = Field(..., description="List of matching items")
-    total_results: int = Field(..., description="Total number of results")
-    page: int = Field(..., description="Current page number")
-    total_pages: int = Field(..., description="Total number of pages") 
+    total: int = Field(..., description="Total number of results")
+    limit: int = Field(..., description="Number of items per page")
+    offset: int = Field(..., description="Number of items skipped")
+    
+    @property
+    def total_results(self) -> int:
+        """Alias for total for backward compatibility."""
+        return self.total
+    
+    @property
+    def page(self) -> int:
+        """Calculate current page number."""
+        return (self.offset // self.limit) + 1 if self.limit > 0 else 1
+    
+    @property
+    def total_pages(self) -> int:
+        """Calculate total number of pages."""
+        return (self.total + self.limit - 1) // self.limit if self.limit > 0 else 1 

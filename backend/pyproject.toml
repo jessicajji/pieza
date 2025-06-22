@@ -1,0 +1,13 @@
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "qdrant-client",
+    "openai",
+    "pydantic-settings",
+    "numpy",
+    "clip-client",
+    "torch",
+    "pillow",
+    "requests",
+    "python-dotenv",
+] 
